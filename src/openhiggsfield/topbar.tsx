@@ -130,11 +130,11 @@ export function Topbar({
           data-busy={busy}
           data-ready={keyConfigured}
           onClick={onKeys}
-          aria-label={keyConfigured ? "Edit platform key" : "Add platform key"}
-          title={keyConfigured ? "Edit platform key" : "Add platform key"}
+          aria-label={keyConfigured ? "Edit API keys" : "Add API keys"}
+          title={keyConfigured ? "Edit API keys" : "Add API keys"}
         >
           <KeyIcon />
-          <span className="ohf-key-text">{keyConfigured ? "Your key" : "Add key"}</span>
+          <span className="ohf-key-text">{keyConfigured ? "Your keys" : "Add keys"}</span>
           <span className="ohf-lamp" />
         </button>
       </div>

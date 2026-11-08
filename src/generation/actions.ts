@@ -2,33 +2,52 @@
 
 import { cookies } from "next/headers";
 
-import { getModel, parseSettings } from "./catalog";
-import type { GenerationPlane } from "./catalog/types";
+import { getModel, parseSettings, providerOf } from "./catalog";
+import type { GenerationPlane, Provider } from "./catalog/types";
 import {
+  KEY_COOKIES,
   MissingCredentialsError,
-  PLATFORM_KEY_COOKIE,
   PLATFORM_KEY_COOKIE_OPTIONS,
+  PROVIDERS,
   decodeCredentials,
   encodeCredentials,
+  isProvider,
   parseCredentialInput,
+  type KeyStatus,
 } from "./credentials";
+import { createFalClient, isFalRequestId } from "./fal";
 import { createPlatformClient } from "./platform";
-import type { StatusResult } from "./platform";
+import type { GenerationStatus, QueuedGeneration, StatusResult } from "./platform";
 import { toPlatform } from "./to-platform";
 
+type Client = {
+  submit(model: string, input: Record<string, unknown>): Promise<QueuedGeneration>;
+  status(requestId: string): Promise<GenerationStatus>;
+};
+
 export async function savePlatformCredentials(data: unknown) {
-  const { apiKey } = parseCredentialInput(data);
+  const { apiKey, provider } = parseCredentialInput(data);
   const jar = await cookies();
-  jar.set(PLATFORM_KEY_COOKIE, encodeCredentials(apiKey), PLATFORM_KEY_COOKIE_OPTIONS);
+  jar.set(KEY_COOKIES[provider], encodeCredentials(apiKey), PLATFORM_KEY_COOKIE_OPTIONS);
 }
 
-export async function clearPlatformCredentials() {
+export async function clearPlatformCredentials(data?: unknown) {
+  const raw =
+    data !== null && typeof data === "object" ? (data as { provider?: unknown }).provider : undefined;
+  const provider = raw === undefined ? "higgsfield" : raw;
+  if (!isProvider(provider)) throw new Error("Unknown provider");
   const jar = await cookies();
-  jar.set(PLATFORM_KEY_COOKIE, "", { ...PLATFORM_KEY_COOKIE_OPTIONS, maxAge: 0 });
+  jar.set(KEY_COOKIES[provider], "", { ...PLATFORM_KEY_COOKIE_OPTIONS, maxAge: 0 });
 }
 
-export async function hasPlatformCredentials() {
-  return (await readStoredCredentials()) !== null;
+/** Which providers have a key saved in this browser. */
+export async function hasPlatformCredentials(): Promise<KeyStatus> {
+  const jar = await cookies();
+  const status = {} as KeyStatus;
+  for (const provider of PROVIDERS) {
+    status[provider] = decodeCredentials(jar.get(KEY_COOKIES[provider])?.value) !== null;
+  }
+  return status;
 }
 
 export async function submitGeneration(plane: GenerationPlane) {
@@ -38,20 +57,29 @@ export async function submitGeneration(plane: GenerationPlane) {
     settings: parseSettings(model, plane.settings),
   };
   const { path, body } = toPlatform(parsed);
-  return createPlatformClient(await readCredentials()).submit(path, body);
+  return (await clientFor(providerOf(model))).submit(path, body);
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server
     actions one at a time per client, so a poll per run would queue ahead of the
     next submit — the fan-out belongs on this side of the call, where it is
-    genuinely parallel. */
+    genuinely parallel. Each request id says which provider owns it. */
 export async function getGenerationStatuses(data: unknown): Promise<StatusResult[]> {
   const requestIds = parseRequestIds(data);
-  const client = createPlatformClient(await readCredentials());
+  const clients = new Map<Provider, Promise<Client>>();
+  const client = (provider: Provider) => {
+    let found = clients.get(provider);
+    if (!found) {
+      found = clientFor(provider);
+      clients.set(provider, found);
+    }
+    return found;
+  };
   return Promise.all(
     requestIds.map(async (requestId): Promise<StatusResult> => {
       try {
-        return { requestId, status: await client.status(requestId) };
+        const provider: Provider = isFalRequestId(requestId) ? "fal" : "higgsfield";
+        return { requestId, status: await (await client(provider)).status(requestId) };
       } catch (caught) {
         return { requestId, error: caught instanceof Error ? caught.message : String(caught) };
       }
@@ -59,17 +87,14 @@ export async function getGenerationStatuses(data: unknown): Promise<StatusResult
   );
 }
 
-async function readStoredCredentials() {
+async function clientFor(provider: Provider): Promise<Client> {
   const jar = await cookies();
-  return decodeCredentials(jar.get(PLATFORM_KEY_COOKIE)?.value);
-}
-
-async function readCredentials() {
-  const stored = await readStoredCredentials();
-  if (!stored) throw new MissingCredentialsError();
+  const stored = decodeCredentials(jar.get(KEY_COOKIES[provider])?.value);
+  if (!stored) throw new MissingCredentialsError(provider);
+  if (provider === "fal") return createFalClient(stored);
   const baseUrl = process.env.HF_API_BASE_URL;
   if (!baseUrl) throw new Error("Missing HF_API_BASE_URL");
-  return { ...stored, baseUrl };
+  return createPlatformClient({ ...stored, baseUrl });
 }
 
 function parseRequestIds(data: unknown): string[] {

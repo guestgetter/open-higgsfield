@@ -112,18 +112,18 @@ function mapStatus(payload: unknown): GenerationStatus {
   };
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
+export function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 }
 
-function stringField(value: Record<string, unknown>, key: string): string | undefined {
+export function stringField(value: Record<string, unknown>, key: string): string | undefined {
   const field = value[key];
   return typeof field === "string" ? field : undefined;
 }
 
-async function readJson(response: Response): Promise<unknown> {
+export async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return null;
   try {
@@ -133,8 +133,16 @@ async function readJson(response: Response): Promise<unknown> {
   }
 }
 
-function messageFromBody(status: number, body: unknown): string {
+/* `detail` is a string on most errors and a list of field errors on a 422. */
+export function messageFromBody(status: number, body: unknown): string {
   const detail = asRecord(body).detail;
   if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail)) {
+    const first = asRecord(detail[0]);
+    const msg = typeof first.msg === "string" ? first.msg : undefined;
+    const loc = Array.isArray(first.loc) ? first.loc.filter((part) => part !== "body").join(".") : "";
+    if (msg) return loc ? `${loc}: ${msg}` : msg;
+  }
+  if (typeof body === "string" && body) return body.slice(0, 200);
   return `Platform request failed (${status})`;
 }

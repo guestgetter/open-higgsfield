@@ -238,7 +238,9 @@ export function describeModel(model: ModelEntry): string {
   const duration = model.settings.duration;
   if (duration?.type === "range") limits.push(`${duration.min}–${duration.max}s`);
 
-  return limits.length ? `${source} · ${limits.join(", ")}` : source;
+  const described = limits.length ? `${source} · ${limits.join(", ")}` : source;
+  /* The account that pays is worth seeing before the press, not after. */
+  return model.provider === "fal" ? `${described} · via fal` : described;
 }
 
 /* Keys that already mean "results per request". The composer shows one batch
