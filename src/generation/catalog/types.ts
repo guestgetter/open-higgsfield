@@ -1,4 +1,6 @@
 export type Surface = "image" | "video";
+/** Which account runs and bills a model. Absent means Higgsfield. */
+export type Provider = "higgsfield" | "fal";
 export type MediaRole = "start" | "end" | "reference" | "video" | "audio";
 
 export type MediaItem = {
@@ -22,6 +24,7 @@ export type PlatformPaths = {
 export type ModelEntry = {
   id: string;
   surface: Surface;
+  provider?: Provider;
   label: string;
   roles: Partial<Record<MediaRole, number>>;
   settings: Record<string, SettingField>;

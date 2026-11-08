@@ -1,4 +1,5 @@
 import { dop } from "./dop";
+import { gptImage2, nanoBananaPro, veo31, veo31Fast } from "./fal";
 import { flux2 } from "./flux-2";
 import { flux3 } from "./flux-3";
 import { grokImagine2 } from "./grok-imagine-2";
@@ -30,7 +31,7 @@ import { recraft41 } from "./recraft-4.1";
 import { seedance2, seedance2Fast, seedance2Mini } from "./seedance-2";
 import { seedance25, seedance25Edit, seedance25Extend } from "./seedance-2.5";
 import { soul2, soulCinema } from "./soul";
-import type { ModelEntry } from "./types";
+import type { ModelEntry, Provider } from "./types";
 import { wan26 } from "./wan-2.6";
 import { wan27 } from "./wan-2.7";
 import { wan3 } from "./wan-3";
@@ -42,12 +43,16 @@ export const MODELS: readonly ModelEntry[] = [
   soulCinema,
   marketingStudioFlare,
   marketingStudioSunburst,
+  nanoBananaPro,
+  gptImage2,
   seedance25,
   seedance25Edit,
   seedance25Extend,
   seedance2,
   seedance2Fast,
   seedance2Mini,
+  veo31Fast,
+  veo31,
   kling3Turbo,
   kling3Std,
   kling3Pro,
@@ -86,5 +91,17 @@ export function getModel(id: string): ModelEntry {
   return model;
 }
 
-export type { GenerationPlane, MediaItem, MediaRole, ModelEntry, PlatformPaths, Surface } from "./types";
+export type {
+  GenerationPlane,
+  MediaItem,
+  MediaRole,
+  ModelEntry,
+  PlatformPaths,
+  Provider,
+  Surface,
+} from "./types";
+
+export function providerOf(model: ModelEntry): Provider {
+  return model.provider ?? "higgsfield";
+}
 export { parseSettings };

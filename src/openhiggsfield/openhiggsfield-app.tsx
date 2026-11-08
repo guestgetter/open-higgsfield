@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { hasPlatformCredentials, submitGeneration } from "@/generation/actions";
-import { MissingCredentialsError } from "@/generation/credentials";
-import { MODELS, getModel } from "@/generation/catalog";
+import {
+  MissingCredentialsError,
+  PROVIDER_LABELS,
+  providerFromMissingKey,
+  type KeyStatus,
+} from "@/generation/credentials";
+import { MODELS, getModel, providerOf } from "@/generation/catalog";
 import type { Surface } from "@/generation/catalog";
 import { assemblePlane } from "@/generation/plane";
 import type { GenerationStatus } from "@/generation/platform";
@@ -151,8 +156,10 @@ function failureText(status: GenerationStatus): string {
 
 function describeError(caught: unknown): string {
   const message = caught instanceof Error ? caught.message : String(caught);
-  if (caught instanceof MissingCredentialsError || message.includes("Missing platform key")) {
-    return "Add your platform key to generate.";
+  const provider =
+    caught instanceof MissingCredentialsError ? caught.provider : providerFromMissingKey(message);
+  if (provider) {
+    return `Add your ${PROVIDER_LABELS[provider]} key to generate.`;
   }
   return `Generation failed — ${message}. Try again; if it repeats, check the key in the sidebar.`;
 }
@@ -179,7 +186,8 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
      recent sheets on top, and a range extends from the last one touched. */
   const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState<SaveProgress | null>(null);
-  const [keyConfigured, setKeyConfigured] = useState(false);
+  const [keys, setKeys] = useState<KeyStatus>({ higgsfield: false, fal: false });
+  const keyConfigured = keys.higgsfield || keys.fal;
   const [keysOpen, setKeysOpen] = useState(false);
 
   const galleryRef = useRef<HTMLDivElement>(null);
@@ -221,9 +229,9 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
   }, [historyLoaded, history]);
 
   useEffect(() => {
-    void hasPlatformCredentials().then((ready) => {
-      setKeyConfigured(ready);
-      if (!ready) setKeysOpen(true);
+    void hasPlatformCredentials().then((status) => {
+      setKeys(status);
+      if (!status.higgsfield && !status.fal) setKeysOpen(true);
     });
   }, []);
 
@@ -274,7 +282,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
       } catch (caught) {
         if (!alive.current) return;
         const message = describeError(caught);
-        if (message.includes("platform key")) setKeysOpen(true);
+        if (message.endsWith("key to generate.")) setKeysOpen(true);
         setHistory((prev) => {
           const next = replaceRequest(prev, requestId, failedRows(requestId, expected, draft, message));
           void saveHistory(next);
@@ -324,9 +332,11 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
      its own skeletons and keeps its own watch, so the composer is free the
      moment the tiles appear and any number of runs can be in flight. */
   const generate = useCallback(async () => {
-    if (!keyConfigured) {
+    /* Each model bills one account; its key is the one that has to be here. */
+    const provider = providerOf(model);
+    if (!keys[provider]) {
       setKeysOpen(true);
-      setError("Add your platform key to generate.");
+      setError(`Add your ${PROVIDER_LABELS[provider]} key to use ${model.label}.`);
       return;
     }
     const plane = assemblePlane();
@@ -390,7 +400,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
       } catch (caught) {
         if (!alive.current) return;
         const message = describeError(caught);
-        if (message.includes("platform key")) setKeysOpen(true);
+        if (message.endsWith("key to generate.")) setKeysOpen(true);
         setError((prev) => prev ?? message);
       } finally {
         if (alive.current) {
@@ -400,7 +410,7 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
     };
 
     await Promise.all(slots.map(runOne));
-  }, [keyConfigured, resume]);
+  }, [keys, model, resume]);
 
   /* Reuse restores the whole plane the run was made from — model, its dials,
      then the words. A reuse that dropped the ratio and resolution would
@@ -699,15 +709,14 @@ export function OpenHiggsfieldApp({ fontClassName = "" }: { fontClassName?: stri
         )}
         {keysOpen && (
           <KeyModal
-            configured={keyConfigured}
+            configured={keys}
             onClose={() => setKeysOpen(false)}
-            onSaved={() => {
-              setKeyConfigured(true);
-              setKeysOpen(false);
+            onSaved={(provider) => {
+              setKeys((prev) => ({ ...prev, [provider]: true }));
               setError(null);
             }}
-            onCleared={() => {
-              setKeyConfigured(false);
+            onCleared={(provider) => {
+              setKeys((prev) => ({ ...prev, [provider]: false }));
             }}
           />
         )}

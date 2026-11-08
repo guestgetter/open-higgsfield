@@ -2987,6 +2987,24 @@
 .ohf-keys-save:disabled {
   opacity: 0.45;
 }
+/* Two providers, one row each; the rule between them keeps the save buttons
+   from reading as one form. */
+.ohf-keys-row + .ohf-keys-row {
+  border-top: 1px solid var(--line-2);
+}
+.ohf-keys-state {
+  font-size: 11.5px;
+  color: var(--tx3);
+}
+.ohf-keys-state[data-ready="true"] {
+  color: var(--accent);
+}
+.ohf-keys-hint {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--tx3);
+}
 
 /* ---------- viewer ---------- */
 

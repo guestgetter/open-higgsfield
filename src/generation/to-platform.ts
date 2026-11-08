@@ -9,6 +9,10 @@ const MAP: Record<string, Mapper> = {
   "soul-2": (plane) => mapSoul(plane, "higgsfield-ai/soul/v2/standard"),
   "marketing-studio-flare": (plane) => mapMarketingImage(plane, "marketing-studio/image/flare"),
   "marketing-studio-sunburst": (plane) => mapMarketingImage(plane, "marketing-studio/image/sunburst"),
+  "nano-banana-pro": mapNanoBananaPro,
+  "gpt-image-2": mapGptImage2,
+  "veo-3.1-fast": (plane) => mapVeo(plane, "fal-ai/veo3.1/fast"),
+  "veo-3.1": (plane) => mapVeo(plane, "fal-ai/veo3.1"),
   "kling-3-turbo": mapKlingTurbo,
   "kling-3-std": (plane) => mapKling3(plane, "kling-video/v3.0/std"),
   "kling-3-pro": (plane) => mapKling3(plane, "kling-video/v3.0/pro"),
@@ -61,6 +65,63 @@ function mapMarketingImage(plane: GenerationPlane, path: string): Mapped {
       quality: plane.settings.quality,
       enhance_prompt: false,
       ...(refs.length ? { image_urls: refs } : {}),
+    },
+  };
+}
+
+/* fal: a reference turns text-to-image into the edit endpoint. */
+function mapNanoBananaPro(plane: GenerationPlane): Mapped {
+  const refs = urls(plane, "reference");
+  return {
+    path: refs.length ? "fal-ai/nano-banana-pro/edit" : "fal-ai/nano-banana-pro",
+    body: {
+      prompt: plane.prompt.text,
+      aspect_ratio: plane.settings.aspectRatio,
+      resolution: plane.settings.resolution,
+      num_images: plane.settings.numImages,
+      output_format: "png",
+      ...(refs.length ? { image_urls: refs } : {}),
+    },
+  };
+}
+
+const GPT_IMAGE_SIZE: Record<string, string> = {
+  auto: "auto",
+  "1:1": "square_hd",
+  "4:3": "landscape_4_3",
+  "3:4": "portrait_4_3",
+  "16:9": "landscape_16_9",
+  "9:16": "portrait_16_9",
+};
+
+function mapGptImage2(plane: GenerationPlane): Mapped {
+  const refs = urls(plane, "reference");
+  return {
+    path: refs.length ? "fal-ai/gpt-image-2/edit" : "fal-ai/gpt-image-2",
+    body: {
+      prompt: plane.prompt.text,
+      image_size: GPT_IMAGE_SIZE[String(plane.settings.aspectRatio)] ?? "auto",
+      quality: plane.settings.quality,
+      num_images: plane.settings.numImages,
+      output_format: "png",
+      ...(refs.length ? { image_urls: refs } : {}),
+    },
+  };
+}
+
+/* Veo takes duration as "4s" | "6s" | "8s"; a start frame switches to the
+   image-to-video endpoint. */
+function mapVeo(plane: GenerationPlane, prefix: string): Mapped {
+  const start = urls(plane, "start")[0];
+  return {
+    path: start ? `${prefix}/image-to-video` : prefix,
+    body: {
+      prompt: plane.prompt.text,
+      aspect_ratio: plane.settings.aspectRatio,
+      duration: `${plane.settings.duration}s`,
+      resolution: plane.settings.resolution,
+      generate_audio: plane.settings.generateAudio,
+      ...(start ? { image_url: start } : {}),
     },
   };
 }
